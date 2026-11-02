@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Breakout Scanner · NSE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f2f3ef;--panel:#fff;--ink:#1a2230;--mute:#667085;--line:#dcdfd8;--long:#0e7a4d;--long-bg:#dff3e8;--short:#b3261e;--short-bg:#fbe4e1;--watch:#7a5a00;--watch-bg:#fbf0cf;--none-bg:#eceee9;--accent:#1f3a8a}
+@media (prefers-color-scheme:dark){:root{--bg:#12161d;--panel:#1a202a;--ink:#e7eaf0;--mute:#98a2b3;--line:#2b3340;--long:#4cd08f;--long-bg:#123626;--short:#ff8a80;--short-bg:#3d1c19;--watch:#f0c24b;--watch-bg:#3a2f0e;--none-bg:#252c38;--accent:#8fa8ff}}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 "IBM Plex Sans",system-ui,sans-serif;font-variant-numeric:tabular-nums;padding:16px clamp(12px,3vw,32px) 40px}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}
+h1{font-size:21px;font-weight:600;margin:0;letter-spacing:-.01em}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--mute);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mute)}.dot.live{background:var(--long);box-shadow:0 0 0 3px var(--long-bg)}
+.bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+label{display:flex;flex-direction:column;font-size:13px;color:var(--mute);gap:4px}
+select,input,button{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-height:42px;width:100%}
+button{cursor:pointer;background:var(--accent);color:#fff;border-color:var(--accent);font-weight:500;align-self:end}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:left;cursor:pointer;min-height:0;color:var(--ink);font-weight:400}
+.stat b{display:block;font-size:22px;font-weight:600;line-height:1.2}.stat span{font-size:13px;color:var(--mute)}
+.stat[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.wrap{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th,td{padding:11px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:13px;font-weight:500;color:var(--mute)}tr:last-child td{border-bottom:0}
+.sym{font-weight:600}.nm{color:var(--mute);font-size:13px;max-width:190px;overflow:hidden;text-overflow:ellipsis}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:500}
+.t-long{background:var(--long-bg);color:var(--long)}.t-short{background:var(--short-bg);color:var(--short)}
+.watch{background:var(--watch-bg);color:var(--watch)}.none{background:var(--none-bg);color:var(--mute)}
+.how{display:block;font-size:12px;color:var(--mute);margin-top:2px}
+.pass{color:var(--long);font-weight:600}.fail{color:var(--short);font-weight:600}.na{color:var(--mute)}
+.msg{padding:30px;text-align:center;color:var(--mute);white-space:normal}.err{color:var(--short)}
+.sk td{height:54px}.sk i{display:block;height:12px;border-radius:6px;background:var(--none-bg);animation:p 1.2s infinite alternate}
+@keyframes p{to{opacity:.4}}@media (prefers-reduced-motion:reduce){.sk i{animation:none}}
+@media (max-width:720px){
+ .stats{grid-template-columns:repeat(2,1fr)}
+ table,tbody,tr,td{display:block}thead{display:none}
+ tr{padding:12px;border-bottom:1px solid var(--line)}tr:last-child{border-bottom:0}
+ td{display:flex;justify-content:space-between;gap:12px;border:0;padding:3px 0;white-space:normal;text-align:right}
+ td::before{content:attr(data-l);color:var(--mute);font-size:13px;text-align:left}
+ td.first{display:block;text-align:left;padding-bottom:6px}td.first::before{display:none}
+ .nm{max-width:none}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Breakout scanner</h1>
+  <span class="chip" role="status"><span class="dot" id="dot"></span><span id="stat">Starting…</span></span>
+</header>
+
+<div class="bar">
+  <label>Sector<select id="sector"><option value="All">All sectors</option></select></label>
+  <label>Date<input type="date" id="date" value="{{ today }}" max="{{ today }}"></label>
+  <label>Search<input type="search" id="q" placeholder="Symbol or name"></label>
+  <label>Refresh<select id="every"><option value="15">15 s</option><option value="30" selected>30 s</option><option value="60">60 s</option></select></label>
+  <button id="go" type="button">Scan now</button>
+</div>
+
+<div class="stats" id="stats"></div>
+
+<div class="wrap"><table>
+  <thead><tr><th>Stock</th><th>Sector</th><th>Signal</th><th>Breakout level</th>
+  <th>Last 2 candles volume</th><th>Overall volume hike</th><th>Triggered</th><th>Range (high / low)</th></tr></thead>
+  <tbody id="body"></tbody>
+</table></div>
+
+<script>
+const $=id=>document.getElementById(id), TODAY="{{ today }}";
+const HOW={T1:"Early breakout + range extension",T2:"Sideways hold + late breakout"};
+const TABS=[["all","All"],["trig","Triggered"],["watch","Watching"],["none","No signal"]];
+let rows=[],tab="trig",timer=null,busy=false,live=false,nextAt=0,updated="";
+try{const s=localStorage.getItem("sector");if(s)window._s=s}catch(e){}
+
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const px=n=>n==null?"–":Number(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+const isTrig=r=>r.signal.endsWith("Triggered");
+const grp=r=>isTrig(r)?"trig":r.signal==="Watching"?"watch":"none";
+const flag=v=>v==null?'<span class="na">–</span>':v?'<span class="pass">Pass</span>':'<span class="fail">Fail</span>';
+
+function pill(r){
+  if(isTrig(r))return `<span class="pill ${r.side==="Long"?"t-long":"t-short"}">${esc(r.strategy)} Triggered · ${r.side}</span><span class="how">${HOW[r.strategy]}</span>`;
+  if(r.signal==="Watching")return `<span class="pill watch">Watching ${esc(r.strategy)}</span><span class="how">${HOW[r.strategy]}</span>`;
+  return `<span class="pill none">${esc(r.signal)}</span>`;
+}
+function skeleton(){$("body").innerHTML=Array(6).fill('<tr class="sk"><td colspan="8"><i></i></td></tr>').join("")}
+
+function render(){
+  const q=$("q").value.trim().toLowerCase();
+  const base=rows.filter(r=>!q||r.symbol.toLowerCase().includes(q)||r.name.toLowerCase().includes(q));
+  const n=k=>k==="all"?base.length:base.filter(r=>grp(r)===k).length;
+  $("stats").innerHTML=TABS.map(([k,l])=>`<button type="button" class="stat" data-k="${k}" aria-pressed="${k===tab}"><b>${n(k)}</b><span>${l}</span></button>`).join("");
+  const list=base.filter(r=>tab==="all"||grp(r)===tab).sort((a,b)=>(grp(a)!=="trig")-(grp(b)!=="trig")||(b.time||"").localeCompare(a.time||"")||a.symbol.localeCompare(b.symbol));
+  if(!list.length){$("body").innerHTML='<tr><td colspan="8" class="msg">Nothing here yet. Signals appear as 5-minute candles close.</td></tr>';return}
+  $("body").innerHTML=list.map(r=>`<tr>
+   <td class="first"><div class="sym">${esc(r.symbol)}</div><div class="nm">${esc(r.name)}</div></td>
+   <td data-l="Sector">${esc(r.sector)}</td>
+   <td data-l="Signal"><div>${pill(r)}</div></td>
+   <td data-l="Breakout level">${r.level!=null?px(r.level)+' <span class="na">'+(r.side==="Long"?"high":"low")+"</span>":"–"}</td>
+   <td data-l="Last 2 candles">${flag(r.vol2)}</td>
+   <td data-l="Volume hike">${flag(r.hike)}${r.ratio!=null?' <span class="na">'+r.ratio+"×</span>":""}</td>
+   <td data-l="Triggered">${isTrig(r)?esc(r.time):"–"}</td>
+   <td data-l="Range">${r.range?px(r.range[0])+" / "+px(r.range[1]):(r.note?'<span class="na">'+esc(r.note)+"</span>":"–")}</td></tr>`).join("");
+}
+
+async function scan(){
+  if(busy)return;busy=true;
+  if(!rows.length)skeleton();
+  $("stat").textContent="Scanning…";
+  try{
+    const res=await fetch("/api/scan?"+new URLSearchParams({sector:$("sector").value,date:$("date").value}));
+    const j=await res.json();if(!res.ok)throw new Error(j.error||res.statusText);
+    rows=j.rows;live=j.meta.market_open;updated=j.meta.updated;nextAt=Date.now()+j.meta.next_in*1000;render();
+  }catch(e){
+    rows=[];render();$("body").innerHTML=`<tr><td colspan="8" class="msg err">${esc(e.message)}</td></tr>`;updated="";
+  }finally{busy=false;tick();schedule()}
+}
+function tick(){
+  $("dot").className="dot"+(live?" live":"");
+  if(!updated){$("stat").textContent=busy?"Scanning… first load can take up to a minute":"Scan failed";return}
+  let t=`Updated ${updated}`;
+  if(live){const s=Math.max(0,Math.round((nextAt-Date.now())/1000));t+=` · next candle in ${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`}
+  else t+=$("date").value===TODAY?" · market closed":" · historical";
+  $("stat").textContent=t;
+}
+function schedule(){clearTimeout(timer);if($("date").value===TODAY&&live)timer=setTimeout(scan,Number($("every").value)*1000)}
+
+$("stats").addEventListener("click",e=>{const b=e.target.closest("[data-k]");if(b){tab=b.dataset.k;render()}});
+$("q").addEventListener("input",render);
+$("go").onclick=scan;
+$("every").onchange=schedule;
+$("date").onchange=()=>{clearTimeout(timer);rows=[];scan()};
+$("sector").onchange=()=>{try{localStorage.setItem("sector",$("sector").value)}catch(e){}clearTimeout(timer);scan()};
+setInterval(tick,1000);
+fetch("/api/sectors").then(r=>r.json()).then(l=>{
+  $("sector").insertAdjacentHTML("beforeend",l.map(s=>`<option>${esc(s)}</option>`).join(""));
+  if(window._s&&l.includes(window._s))$("sector").value=window._s;
+  scan();
+});
+</script>
+</body>
+</html>
